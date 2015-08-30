@@ -281,4 +281,38 @@ macro_rules! take(
 
     assert!(c.ended);
   }
+
+   struct TestConsumer {
+       done : bool
+
+   }
+
+   impl Consumer for TestConsumer {
+       fn end(&mut self) {
+       }
+
+  fn consume(&mut self, input: &[u8]) -> ConsumerState {
+    if self.done {
+        ConsumerState::ConsumerDone
+    }  else if input.len() < 2 {
+        ConsumerState::Await(0,2)
+    } else {
+        self.done = true;
+        ConsumerState::ConsumerDone
+       }
+    }
+
+   fn failed(&mut self, error_code: u32) {
+        println!("failed with error code: {}", error_code);
+   }
+}
+
+  #[test]
+  fn overrun() {
+      let mut p = MemProducer::new(&b"a"[..], 1);
+      let mut c = TestConsumer{ done: false };
+      c.run(&mut p);
+      assert_eq!(c.done, false);
+  }
+
 }
