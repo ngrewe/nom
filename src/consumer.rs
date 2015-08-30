@@ -79,7 +79,7 @@ use std::io::SeekFrom;
 ///
 /// * ConsumerError(error code) when something went wrong
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
-pub enum ConsumerState {
+pub enum ConsumerState<E=u32> {
   Await(
     usize,    // consumed
     usize     // needed buffer size
@@ -91,15 +91,15 @@ pub enum ConsumerState {
   ),
   Incomplete,
   ConsumerDone,
-  ConsumerError(u32)
+  ConsumerError(E)
 }
 
 /// Implement the consume method, taking a byte array as input and returning a consumer state
 ///
 /// The run function takes care of continuing or not
-pub trait Consumer {
-  fn consume(&mut self, input: &[u8]) -> ConsumerState;
-  fn failed(&mut self, error_code: u32);
+pub trait Consumer<E=u32> {
+  fn consume(&mut self, input: &[u8]) -> ConsumerState<E>;
+  fn failed(&mut self, error_code: E);
   fn end(&mut self);
 
   fn run(&mut self, producer: &mut Producer) {
@@ -111,7 +111,7 @@ pub trait Consumer {
     let mut seek_from:SeekFrom = SeekFrom::Current(0);
     let mut eof = false;
     let mut end = false;
-    let mut err: Option<u32> = None;
+    let mut err: Option<E> = None;
 
     loop {
       //self.getDataFromProducer(producer, seek_from, needed, acc);
@@ -280,5 +280,28 @@ macro_rules! take(
     c.run(&mut p);
 
     assert!(c.ended);
+  }
+
+  struct StringErrorConsumer { failed_called : bool }
+
+  impl Consumer<&'static str> for StringErrorConsumer {
+      fn end(&mut self) {
+      }
+
+      fn failed(&mut self, error: &str) {
+        self.failed_called = true;
+        assert_eq!(error, "error");
+      }
+    fn consume(&mut self, _: &[u8]) -> ConsumerState<&'static str> {
+        ConsumerState::ConsumerError("error")
+    }
+  }
+
+  #[test]
+  fn string_error() {
+      let mut p = MemProducer::new(b"a", 1);
+      let mut c = StringErrorConsumer{ failed_called: false };
+      c.run(&mut p);
+      assert_eq!(c.failed_called, true);
   }
 }
